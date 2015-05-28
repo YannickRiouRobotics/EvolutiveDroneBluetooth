@@ -1,0 +1,9 @@
+[Unit]
+Description= Launch drone agent pairingprocess
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/drone-agent.sh
+
+[Install]
+WantedBy=multi-user.target

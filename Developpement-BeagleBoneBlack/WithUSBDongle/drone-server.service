@@ -1,0 +1,9 @@
+[Unit]
+Description= Launch drone server control process
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/drone-server.sh
+
+[Install]
+WantedBy=multi-user.target

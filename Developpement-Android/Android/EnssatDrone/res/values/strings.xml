@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">EnssatDrone</string>
+   
+    
+    <!-- Control Pad -->
+ 	<string name="Left">⬅︎</string>
+ 	<string name="Right">➡︎</string>
+ 	<string name="Forward">⬆︎</string>
+ 	<string name="Backward">⬇︎</string>
+ 	<string name="STOP">STOP</string>
+ 	
+ 	<!-- Various Information -->
+    <string name="ReceivedMessageLabel">Received Message</string>
+    <string name="DistanceMeasuredLabel">Distance Measured</string>
+
+</resources>

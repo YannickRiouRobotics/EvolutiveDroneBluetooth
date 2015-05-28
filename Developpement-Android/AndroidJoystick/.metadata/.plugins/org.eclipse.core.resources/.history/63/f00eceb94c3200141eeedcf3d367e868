@@ -1,0 +1,129 @@
+package com.example.app;
+
+import java.io.IOException;
+
+import android.bluetooth.BluetoothAdapter;
+import android.content.Intent;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.TextView;
+import android.widget.Toast;
+
+public class MainActivity extends ActionBarActivity {
+	
+
+	public int REQUEST_ENABLE_BT = 1;
+	
+    BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+	BluetoothManager b;
+	private TextView ReceivedMsg;
+	private EditText MsgtoSend;
+	boolean flagConnected = false;
+	double Longitude = 0.0;
+	double Latitude = 0.0;
+	
+	
+	 private final Handler ha = new Handler() {
+	        
+	       
+	        @Override
+	        public void handleMessage(Message msg) {
+	        	String Lat = msg.getData().getString("Latitude");
+	        	String Lon = msg.getData().getString("Longitude");
+	        	
+	        	if(Lon != null)
+	        	{
+		        	Longitude = Double.parseDouble(Lon);
+		        	Log.e("BluetoothTest", "LA CA BEUGUE");
+		        	Log.e("BluetoothTest", "Lon : "+Lon);
+			        ReceivedMsg.append(Lon);
+	        	}
+		        
+	        	if(Lat != null)
+	        	{
+		        Latitude = Double.parseDouble(Lat);
+		        Log.e("BluetoothTest", "Lat : "+Lat);
+		        ReceivedMsg.append(Lat);
+	        	}
+	       
+	        }
+	        
+	 };
+	       
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState)  {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.activity_main);
+		
+		ReceivedMsg = (TextView) findViewById(R.id.reception);
+		MsgtoSend = (EditText) findViewById(R.id.MsgToSendBT);
+		try {
+			b = new BluetoothManager(ha);
+			Log.e("BLUETOOTH", "Creation du Thread BT OK");
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		b.start();
+		
+	}
+	
+	
+	public void SendBTMess(View view)
+	{
+		if (b.isConnected()) 
+		{
+		String msg = MsgtoSend.getText().toString();
+		b.write(msg.getBytes());
+		}
+		else
+		{
+			Toast.makeText(getApplicationContext(), "Appareil non connecté", Toast.LENGTH_SHORT).show();
+		}
+	}
+	 
+	 
+	 // When button is pressed, bluetooth is asked to be turned on 
+	public void BluetoothConnect (View view) throws IOException
+	{
+		
+		Button bConnect = (Button) findViewById(R.id.buttonBTConnect);
+		
+		if (!mBluetoothAdapter.isEnabled()) 
+		{
+			 Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+			 startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+		}
+		else
+		{
+			if(!flagConnected)
+			{
+			b.connect();
+			Log.e("BLUETOOTH", "Connection OK");
+			bConnect.setText("Disconnect");
+			flagConnected = true;
+			}
+			else 
+			{
+				b.disconnect();
+				bConnect.setText("Connect");
+				flagConnected = false;
+			}
+			
+			
+		}
+		 
+		
+		
+
+	}
+	
+	
+	
+}

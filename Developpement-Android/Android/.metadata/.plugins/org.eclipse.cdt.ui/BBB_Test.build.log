@@ -1,0 +1,16 @@
+
+**** Build of configuration bbb for project BBB_Test ****
+
+make all 
+Building file: ../src/BBB_Test.cpp
+Invoking: GCC C++ Compiler
+g++ -O0 -g3 -Wall -c -fmessage-length=0 -MMD -MP -MF"src/BBB_Test.d" -MT"src/BBB_Test.d" -o "src/BBB_Test.o" "../src/BBB_Test.cpp"
+Finished building: ../src/BBB_Test.cpp
+ 
+Building target: BBB_Test
+Invoking: MacOS X C++ Linker
+g++  -o "BBB_Test"  ./src/BBB_Test.o   
+Finished building target: BBB_Test
+ 
+
+**** Build Finished ****

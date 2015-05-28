@@ -1,0 +1,443 @@
+#!/usr/bin/env python
+# file: drone-server
+# auth: Yannick Riou <riou_yannick@yahoo.fr>
+# desc: Programm that control drone via bluetooth connection
+
+
+from bluetooth import *
+import Adafruit_BBIO.PWM as PWM
+import Adafruit_BBIO.GPIO as GPIO
+import Adafruit_BBIO.ADC as ADC
+import os
+import threading
+
+# So we can share info between threads
+import Queue
+
+# so we can write error into a log
+import logging
+from logging.handlers import RotatingFileHandler
+
+# Import mean function
+import numpy
+
+# Import Open CV to take pictures
+import cv2
+
+import time
+
+#############################################
+####        PINOUT Definitions          ######
+##############################################
+
+PIN_PWMMotorRight = "P9_14"
+PIN_PWMMotorLeft = "P9_16"
+PIN_MotorRightAIN2 = "P9_11" #Right AIN2
+PIN_MotorRightAIN1 = "P9_12" #Right AIN1
+
+PIN_MotorRightBIN2 = "P9_15" #Right BIN2
+PIN_MotorRightBIN1 = "P9_13" #Right BIN1
+PIN_Standby = "P9_21" # StandBy pin
+
+LED_Pin = "P8_10"
+
+##############################################                                                                                                                                                                                                                               
+####        CONSTANT Definitions        ######                                                                                                                                                                                                                             
+############################################## 
+
+# Bluetooth address of the tablet
+BTaddr = ''
+
+# Value for the range of error for the sensor
+Epsilon = 10
+
+# To make the led ON only for the first boot of the system
+FirstConnFlag = True
+
+# Flag to know if auto-avoid mode is active
+AutoAvoid = False
+
+##############################################
+####        Function Definitions        ######
+##############################################
+
+# Function to take picture through Usb Camera
+
+def TakePicture():
+    droneStatus = True
+
+    
+    while droneStatus == True:
+
+        cam = cv2.VideoCapture()
+        cam.open(-1)
+        img = cam.read()
+        cv2.imwrite('drone_snap.jpg', img[1])
+        cam.release() 
+        cmd = 'obexftp -b ' + BTaddr + ' -c /Pictures -p drone_snap.jpg'
+        logger.info(cmd)
+        os.system(cmd);
+        client_socket.send("!drone!POK")
+
+        semaphore.acquire()
+
+        if DroneStatusQueue2.empty() == False:
+            droneStatus = DroneStatusQueue2.get()
+
+# Function to move the robot in the 4 directions
+def Go(DirectionLeft,DirectionRight,LeftMotorSpeed, RightMotorSpeed):
+    Direction = DirectionLeft + DirectionRight
+    if Direction == -2 :
+        #Backward
+        GPIO.output(PIN_MotorRightAIN2,GPIO.LOW)
+        GPIO.output(PIN_MotorRightAIN1,GPIO.HIGH)
+        
+        GPIO.output(PIN_MotorRightBIN1,GPIO.LOW)
+        GPIO.output(PIN_MotorRightBIN2 ,GPIO.HIGH)
+    
+    elif Direction == 2:
+        #Forward
+        GPIO.output(PIN_MotorRightAIN2,GPIO.HIGH)
+        GPIO.output(PIN_MotorRightAIN1,GPIO.LOW)
+        
+        GPIO.output(PIN_MotorRightBIN1,GPIO.HIGH)
+        GPIO.output(PIN_MotorRightBIN2 ,GPIO.LOW)
+    
+    elif Direction == 0:
+        # Turn Left
+        if DirectionLeft == -1:
+            GPIO.output(PIN_MotorRightAIN2,GPIO.HIGH)
+            GPIO.output(PIN_MotorRightAIN1,GPIO.LOW)
+            
+            GPIO.output(PIN_MotorRightBIN1,GPIO.LOW)
+            GPIO.output(PIN_MotorRightBIN2 ,GPIO.HIGH)
+        # Turn right
+        elif DirectionRight == -1:
+            GPIO.output(PIN_MotorRightAIN2,GPIO.LOW)
+            GPIO.output(PIN_MotorRightAIN1,GPIO.HIGH)
+            
+            GPIO.output(PIN_MotorRightBIN1,GPIO.HIGH)
+            GPIO.output(PIN_MotorRightBIN2 ,GPIO.LOW)
+
+
+    PWM.set_duty_cycle(PIN_PWMMotorRight,RightMotorSpeed)
+    PWM.set_duty_cycle(PIN_PWMMotorLeft,LeftMotorSpeed)
+
+#Function that run drone principal actions
+def RunDrone():
+    droneStatus = True
+
+    while droneStatus==True:
+        try:
+            cmdrcv = client_socket.recv(15)
+            if cmdrcv[0:7] == "!drone!":
+            #Change with number with 2 digit for joystick (big value)
+            #Direction Command received
+                if len(cmdrcv[7:15]) == 1:
+                    if (int(cmdrcv[7:15]) == 0):
+                        Go(1,1,0,0)
+                        logger.info("**DEBUG: stop**")
+                    elif (int(cmdrcv[7:15])==1):
+                        Go(1,1,100,100)
+                        logger.info("**DEBUG: forward**")
+                    elif (int(cmdrcv[7:15])==2):
+                        Go(-1,1,100,100)
+                        logger.info("**DEBUG: left**")
+                    elif (int(cmdrcv[7:15])==3):
+                        Go(1,-1,100,100)
+                        logger.info("**DEBUG: right**")
+                    elif (int(cmdrcv[7:15])==4):
+                        Go(-1,-1,100,100)
+                        logger.info("**DEBUG: backward**")
+                        
+                elif cmdrcv[7:15] == "stoprqst":
+                    # Application closed or stop requested
+                    droneStatus = False
+                    DroneStatusQueue.put(droneStatus)
+                    logger.info("**DEBUG: going to sleep**")
+                    
+                elif cmdrcv[7:15] == "picture":
+                    # User Requested to take a picture
+                    logger.info("**DEBUG: Taking Picture**")
+                    semaphore.release()
+                    
+                elif cmdrcv[7:15] == "echo":
+                    # Echo to know if the drone is online
+                    client_socket.send("!drone!Online")
+
+                elif cmdrcv[7:15] == "avoidOK":
+                    Mode ="A"
+                    DroneAvoidModeQueue.put(Mode)
+
+                elif cmdrcv[7:15] == "avoidNOK":
+                    Mode ="M"
+                    DroneAvoidModeQueue.put(Mode)
+                    
+
+        except IOError:
+            logger.warning("IOException Occured")
+            droneStatus = False
+            DroneStatusQueue.put(droneStatus)
+
+# Function that compute a mean from distance sensor
+def ComputeSensorMean():
+    droneStatus = True
+    i = 0
+    j = 0
+   # Value for mean of sensors value                                                                                                                                                                                                                                        
+    sumFront = range(101)
+    sumBack = range(101)
+    
+    # Value of front and back sensors                                                                                                                                                                                                                                        
+    meanFrontSensor = 0
+    meanBackSensor = 0
+    ObstacleDetectedFlag = False
+    NbOfAvoid = 0
+    DroneAvoidMode = "N"
+
+    while droneStatus == True:
+
+        if DroneStatusQueue.empty() == False:
+            droneStatus = DroneStatusQueue.get()
+
+        sumFront[i] = ADC.read("P9_39")*100
+        sumBack[i] = ADC.read("P9_40")*100
+        i=i+1
+        
+        time.sleep(0.001)
+        if(i>100):
+            meanFrontSensor = numpy.mean(sumFront)
+            meanBackSensor = numpy.mean(sumBack)
+            i=0
+            
+            if (((25-Epsilon) <= meanFrontSensor <= (25+Epsilon)) or ((12-Epsilon) <= meanBackSensor <= (12+Epsilon)) or ((50-Epsilon) <= meanFrontSensor <= (50+Epsilon)) or ((20-Epsilon) <= meanBackSensor <= (20+Epsilon))) and (ObstacleDetectedFlag == False):
+                
+                client_socket.send("!drone!Obs")
+                while(DroneAvoidModeQueue.empty()):
+                    pass
+                DroneAvoidMode = DroneAvoidModeQueue.get()
+                ObstacleDetectedFlag = True
+
+            # Manual Mode
+            # Let user control and if really too close from obstacle, stop robot
+            if(DroneAvoidMode == "M"):
+                 #User was crazy and tried to punch an obstacle, so stop the drone
+                 if ((50-Epsilon) <= meanFrontSensor <= (50+Epsilon)) or ((20-Epsilon) <= meanBackSensor <= (20+Epsilon)):
+                     logger.warning("Drone was in Manual mode and was forced to stop")
+                     Go(1,1,0,0)
+                     ObstacleDetectedFlag = False
+                     DroneAvoidMode = "N" # Put Mode To none
+            
+            elif(DroneAvoidMode == "A"):     
+                if (20-Epsilon) <= meanBackSensor <= (20+Epsilon):
+                    logger.warning("Obstacle Avoidance Activated : Back = %d",round(meanBackSensor))
+                    Go(1,1,100,100)
+                    time.sleep(0.8)
+                    Go(-1,1,100,100)
+                    time.sleep(0.85)
+                    Go(1,1,100,100)
+                    time.sleep(0.7)
+                    NbOfAvoid = NbOfAvoid + 1
+                elif (50-Epsilon) <= meanFrontSensor <= (50+Epsilon):
+                    logger.warning("Obstacle Avoidance Activated : Front = %d",round(meanFrontSensor))
+                    Go(-1,-1,100,100)
+                    time.sleep(0.8)
+                    Go(-1,1,100,100)
+                    time.sleep(0.85)
+                    Go(1,1,100,100)
+                    time.sleep(0.7)
+                    NbOfAvoid =NbOfAvoid + 1
+                if (NbOfAvoid >= 5):
+                    ObstacleDetectedFlag = False 
+                    DroneAvoidMode = "N" # Put Mode To none      
+    
+    DroneStatusQueue2.put(droneStatus)
+    semaphore.release()
+
+# Function to initialize the drone
+def InitDrone():
+    
+    global FirstConnFlag
+    global logger 
+                                                                                                                                                                                                                       
+    #Init Bluetooth server for communication
+    server_socket=BluetoothSocket(RFCOMM)
+    server_socket.bind(("",PORT_ANY))
+    server_socket.listen(1)
+    port = server_socket.getsockname()[1]
+    
+    # Identify the connection : security. Must be the same one on the android apps
+    uuid = "00001101-0000-1000-8000-00805f9b34fb"
+    
+    advertise_service( server_socket, "ENSSATDrone",
+                      service_id = uuid,
+                      service_classes = [ uuid, SERIAL_PORT_CLASS ],
+                      profiles = [ SERIAL_PORT_PROFILE ])
+
+
+    if(FirstConnFlag):
+        # Show to the user that the drone is ready for connection
+        GPIO.setup("P8_10", GPIO.OUT)
+        GPIO.output("P8_10", GPIO.HIGH)
+        FirstConnFlag = False
+
+    client_socket,addr = server_socket.accept()
+    client_socket.send("!drone!OK")
+
+    GPIO.output("P8_10", GPIO.LOW)
+
+    #we take first tuple element because addr is (bt_addr,port) tuple
+    BTaddr = addr[0]
+    logger.info("---------------------- NEW SESSION ----------------------------------")
+    logger.info("Connected by %s", BTaddr)
+    
+    # All duty to zero and freq of 10Khz                                                                                                                                                                                                                                     
+    PWM.start(PIN_PWMMotorRight, 0) # For Motor Right                                                                                                                                                                                                                        
+    PWM.start(PIN_PWMMotorLeft, 0) # For Motor Left                                                                                                                                                                                                                          
+    GPIO.setup(PIN_MotorRightAIN2, GPIO.OUT) # For Motor Right AIN2                                                                                                             
+    GPIO.setup(PIN_MotorRightAIN1, GPIO.OUT) # For Motor Right AIN1                                                                                          
+    GPIO.setup(PIN_MotorRightBIN1, GPIO.OUT) # For Motor Left BIN1                                                                                                               
+    GPIO.setup(PIN_MotorRightBIN2 , GPIO.OUT) # For Motor Left BIN2                                                                                                              
+    GPIO.setup(PIN_Standby ,GPIO.OUT) # For Standby                                                                                                                                                                                                                               
+    # Put all GPIO to Low except standby pin to switch on motor driver                                                                                                                                                                                                
+    GPIO.output(PIN_Standby ,GPIO.LOW)
+    GPIO.output(PIN_MotorRightAIN2,GPIO.LOW)
+    GPIO.output(PIN_MotorRightAIN1,GPIO.LOW)
+    GPIO.output(PIN_MotorRightBIN1,GPIO.LOW)
+    GPIO.output(PIN_MotorRightBIN2 ,GPIO.LOW)
+    GPIO.output(PIN_Standby ,GPIO.HIGH)
+    # Boolean variable for main loop                                                                                                                                                                                                                                        
+    DroneRunning = True
+
+    #Set Frequency                                                                                                                                                                                                                                                           
+    PWM.set_frequency(PIN_PWMMotorRight, 10000)
+    PWM.set_frequency(PIN_PWMMotorLeft, 10000)
+    
+    # ADC setup for distance sensors                                                                                                                                                                                                                                         
+    ADC.setup()
+
+    return server_socket, client_socket, BTaddr 
+
+# Function to deinitialize the drone
+def DeInitDrone(drone_socket, tablet_socket):
+
+    #Close BT socket                                                                                                                                                                                                                                                         
+    drone_socket.close()
+    tablet_socket.close()
+
+    GPIO.output(PIN_Standby ,GPIO.LOW)
+    # Switch off PWM Channels                                                                                                                                                                                                                                                
+    PWM.stop(PIN_PWMMotorRight)
+    PWM.stop(PIN_PWMMotorLeft)
+    
+    # Turn off all pin that control the motor driver                                                                                                                                                                                                                        
+    GPIO.output(PIN_MotorRightAIN2,GPIO.LOW)
+    GPIO.output(PIN_MotorRightAIN1,GPIO.LOW)
+    GPIO.output(PIN_MotorRightBIN1,GPIO.LOW)
+    GPIO.output(PIN_MotorRightBIN2,GPIO.LOW)
+    
+    #Tur off Led
+    GPIO.output("P8_10", GPIO.LOW)
+
+    # Cleanup the GPIO configuration
+    GPIO.cleanup()
+
+    # Cleanup the PWM configuration                                                                                                                                                                                                                                          
+    PWM.cleanup()
+
+
+#############################################
+####        Variable/Ports Definitions  #####
+#############################################
+
+# Boolean variable for main loop
+DroneRunning = True
+
+#Queue to share the DroneStatus between thread
+DroneStatusQueue = Queue.Queue()
+DroneStatusQueue2 = Queue.Queue()
+DroneAvoidModeQueue = Queue.Queue()
+
+# Semaphore to avoid user from controlling the drone while avoiding obstacle
+semaphore = threading.Semaphore(0)
+
+
+##############################################
+####       Threads  Definitions         ######
+##############################################
+#First Thread to control the normal operation of the drone (control, etc.)
+class NormalModeThread(threading.Thread):
+    
+    def __init__(self):
+        threading.Thread.__init__(self)
+    
+    def run(self):
+        RunDrone()
+
+
+class ComputingThread(threading.Thread):
+    
+    def __init__(self):
+        threading.Thread.__init__(self)
+
+    def run(self):
+        ComputeSensorMean()
+
+class SendImageThread(threading.Thread):
+    
+    def __init__(self):
+        threading.Thread.__init__(self)
+
+    def run(self):
+        TakePicture()
+
+#############################################
+####        Initialization              #####
+#############################################
+
+# Create two thread :
+#- One for normal operation (control, photos)
+#- One for mean of sensor output
+ControlThread = NormalModeThread()
+MeanThread = ComputingThread()
+ImageSenderThread = SendImageThread()
+
+ # Create Logging Process
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s :: %(levelname)s :: %(message)s')
+file_handler = RotatingFileHandler('drone_activity.log', 'a', 1000000, 1)
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+#############################################
+####        Main Loop                   #####
+#############################################
+while True :
+
+    (server_socket, client_socket, BTaddr) = InitDrone()
+
+    ControlThread = NormalModeThread()
+    MeanThread = ComputingThread()                                                                                                                                                                               
+    ImageSenderThread = SendImageThread()
+
+    logger.info("Start Threads")
+    ControlThread.start()
+    MeanThread.start()
+    ImageSenderThread.start()
+    
+    ControlThread.join()
+    MeanThread.join()
+    ImageSenderThread.join()
+    
+    logger.info("Exiting Main Thread")
+    
+    DeInitDrone(server_socket,client_socket)
+
+##############################################
+####           End of Main Loop         ######
+##############################################
+##############################################
+####           End of script            ######
+##############################################

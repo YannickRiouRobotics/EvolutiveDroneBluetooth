@@ -1,0 +1,4 @@
+INDEX VERSION 1.126+/Users/Yannick/Documents/DossiersENSSAT/3A/ProjetTechnoDrone/Android/.metadata/.plugins/org.eclipse.jdt.core
+2796837612.index
+753711759.index
+671511360.index

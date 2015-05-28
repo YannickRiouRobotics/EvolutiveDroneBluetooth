@@ -1,0 +1,7 @@
+{
+  "/Users/Yannick/android-sdk/platforms/android-19/android.jar": {
+    "location": "/Users/Yannick/android-sdk/platforms/android-19/android.jar",
+    "status": "UNRESOLVED",
+    "error": "No call model found for \u0027/Users/Yannick/android-sdk/platforms/android-19/android.jar\u0027. Neither fingerprint \u00279d58c29f33a93f486da30401118a4e45a7f208cb\u0027 nor symbolic name \u0027android\u0027 are known."
+  }
+}

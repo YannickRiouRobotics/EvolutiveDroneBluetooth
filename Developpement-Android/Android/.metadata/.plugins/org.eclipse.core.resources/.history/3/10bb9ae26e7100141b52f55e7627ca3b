@@ -1,0 +1,373 @@
+package com.projeteii3.enssatdrone;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.UUID;
+
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.app.ProgressDialog;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
+import android.content.Intent;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+
+public class MainActivity extends Activity {
+
+	
+	// UI Components Definition
+    private Button mUpButton;
+    private Button mStopButton;
+    private Button mLeftButton;
+    private Button mRightButton;
+    private Button mDownButton;
+    ImageView ObstacleWarning;
+    
+    private String strInput;
+    
+    // Prefix for the drone frame 
+    private String FramePrefix = "!drone!";
+	
+    private static final String TAG = "Debug-MainActivity";
+  
+    // Device UUID needed for Bluetooth communication
+	private UUID mDeviceUUID;
+
+	// Bluetooth socket for initiate communication between two devices
+	private BluetoothSocket mBTSocket;
+	
+	// Thread to read the data incoming
+	private ReadInput mReadThread = null;
+	
+	private boolean mIsUserInitiatedDisconnect = false;
+
+	// All controls here
+	private TextView mTxtReceive;	
+	private Button mBtnDisconnect;
+
+	private boolean mIsBluetoothConnected = false;
+
+	private BluetoothDevice mDevice;
+
+	private ProgressDialog progressDialog;
+  
+    
+	// When application is started
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+    	super.onCreate(savedInstanceState);
+		setContentView(R.layout.activity_main);
+	
+		Intent intent = getIntent();
+		Bundle b = intent.getExtras();
+		mDevice = b.getParcelable(Homescreen.DEVICE_EXTRA);
+		mDeviceUUID = UUID.fromString(b.getString(Homescreen.DEVICE_UUID));
+
+		Log.d(TAG, "Ready");
+
+        setupUI();
+        Log.d(TAG, "Setup UI Done !");
+        
+   }
+    
+    
+    
+    // Disconnect the blueotooth by closing the reading inputstream thread 
+	private class DisConnectBT extends AsyncTask<Void, Void, Void> {
+
+	
+		@Override
+		protected Void doInBackground(Void... params) {
+
+			if (mReadThread != null) {
+				mReadThread.stop();
+				while (mReadThread.isRunning()); // Wait until it stops
+				mReadThread = null;
+
+			}
+
+			try {
+				mBTSocket.close();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+			return null;
+		}
+
+		@Override
+		protected void onPostExecute(Void result) {
+			super.onPostExecute(result);
+			mIsBluetoothConnected = false;
+			if (mIsUserInitiatedDisconnect) {
+				finish();
+			}
+		}
+
+	}
+
+	// Disconnect Bluetooth if the application is set on pause
+	@Override
+	protected void onPause() {
+		if (mBTSocket != null && mIsBluetoothConnected) {
+			new DisConnectBT().execute();
+		}
+		Log.d(TAG, "Paused");
+		super.onPause();
+	}
+
+	// Rec-connect the bluetooth if the application is resumed
+	@Override
+	protected void onResume() {
+		if (mBTSocket == null || !mIsBluetoothConnected) {
+			new ConnectBT().execute();
+		}
+		Log.d(TAG, "Resumed");
+		super.onResume();
+	}
+
+	
+	@Override
+	protected void onStop() {
+		Log.d(TAG, "Stopped");
+		super.onStop();
+	}
+
+	@Override
+	protected void onSaveInstanceState(Bundle outState) {
+		// TODO Auto-generated method stub
+		super.onSaveInstanceState(outState);
+	}
+
+	
+	
+	private class ConnectBT extends AsyncTask<Void, Void, Void> {
+		private boolean mConnectSuccessful = true;
+
+		@Override
+		protected void onPreExecute() {
+			progressDialog = ProgressDialog.show(MainActivity.this, "Hold on", "Connecting...");
+		}
+
+		@SuppressLint("NewApi") @Override
+		protected Void doInBackground(Void... devices) {
+
+			try {
+				if (mBTSocket == null || !mIsBluetoothConnected) {
+					mBTSocket = mDevice.createInsecureRfcommSocketToServiceRecord(mDeviceUUID);
+					BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
+					mBTSocket.connect();
+				}
+			} catch (IOException e) {
+				// Unable to connect to device
+				e.printStackTrace();
+				mConnectSuccessful = false;
+			}
+			return null;
+		}
+
+		@Override
+		protected void onPostExecute(Void result) {
+			super.onPostExecute(result);
+
+			if (!mConnectSuccessful) {
+				Toast.makeText(getApplicationContext(), "Could not connect to device. Is it a Serial device? Also check if the UUID is correct in the settings", Toast.LENGTH_LONG).show();
+				finish();
+			} else {
+				msg("Connected to device");
+				mIsBluetoothConnected = true;
+				mReadThread = new ReadInput(); // Kick off input reader
+			}
+
+			progressDialog.dismiss();
+		}
+
+	}
+    
+	
+    private void sendBTMsg(String s)
+    {
+    	try {
+			mBTSocket.getOutputStream().write(s.getBytes());
+		} catch (IOException e) {
+			e.printStackTrace();
+			msg("Send Message Failed");
+		}
+    }
+    
+ // Read input thread 
+    private class ReadInput implements Runnable {
+
+		private boolean bStop = false;
+		private Thread t;
+
+		// Constructor
+		public ReadInput() {
+			mTxtReceive = (TextView) findViewById(R.id.txtReceive);         
+			t = new Thread(this, "Input Thread");
+			t.start();
+		}
+
+		// Method to verify that the thread is running
+		public boolean isRunning() {
+			return t.isAlive();
+		}
+
+		
+		// Main routine of the thread
+		@Override
+		public void run() {
+			InputStream inputStream;
+
+			try {
+				// Get the input bluetooth stream from the socket
+				inputStream = mBTSocket.getInputStream();
+				
+				// While the disconnect button isn't pressed
+				while (!bStop) 
+				{
+					// Create temporary buffer to get datas from the stream
+					byte[] buffer = new byte[256];
+					
+					if (inputStream.available() > 0) 
+					{
+						inputStream.read(buffer);
+						int i = 0;
+						/*
+						 * This is needed because new String(buffer) is taking the entire buffer i.e. 256 chars on Android 2.3.4 http://stackoverflow.com/a/8843462/1287554
+						 */
+						for (i = 0; i < buffer.length && buffer[i] != 0; i++) {
+						}
+						strInput = new String(buffer, 0, i);
+						
+						// needed to update the text from the UI
+						runOnUiThread(new Runnable() 
+						{
+				            @Override
+				            public void run() 
+				            {
+				            	// write what is received in the textview
+				            	mTxtReceive.setText(strInput);
+				     
+				            	if(strInput.contains("0"))
+				            	{
+				            		ObstacleWarning.setVisibility(View.VISIBLE);
+				            	}
+				            	else
+				            	{
+				            		ObstacleWarning.setVisibility(View.INVISIBLE);
+				            	}
+				            }
+						});
+					}
+				}
+			} 
+			catch (IOException e) 
+			{
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+		}
+
+		// Method to stop the thread main routine when disconnect is pressed
+		public void stop() {
+			bStop = true;
+		}
+
+	}
+
+    
+ // Setup the UI with Button Actions
+    public void setupUI()
+    {
+    	// Load the different view for the UI components
+    	mBtnDisconnect = (Button) findViewById(R.id.btnDisconnect);
+		
+        mUpButton = (Button) findViewById(R.id.button_up);
+        mStopButton = (Button) findViewById(R.id.button_down);
+        mLeftButton = (Button) findViewById(R.id.button_left);
+        mRightButton = (Button) findViewById(R.id.button_right);
+        ObstacleWarning = (ImageView) findViewById(R.id.ObstacleWarning);
+        ObstacleWarning.setVisibility(View.INVISIBLE);
+    	
+        // Initialize the action done when touching the different button
+    	
+    	 // Initialize the send button with a listener that for click events
+        mStopButton = (Button) findViewById(R.id.button_stop);
+        mStopButton.setOnClickListener(new OnClickListener() {
+            public void onClick(View v) {
+                // Send a message using content of the edit text widget
+            	sendBTMsg(FramePrefix + "0");
+            }
+        });
+
+        // Initialize the send button with a listener that for click events
+        mUpButton = (Button) findViewById(R.id.button_up);
+        mUpButton.setOnClickListener(new OnClickListener() {
+            public void onClick(View v) {
+                // Send a message using content of the edit text widget
+            	sendBTMsg(FramePrefix + "1");
+            }
+        });
+        
+        // Initialize the send button with a listener that for click events
+        mLeftButton = (Button) findViewById(R.id.button_left);
+        mLeftButton.setOnClickListener(new OnClickListener() {
+            public void onClick(View v) {
+                // Send a message using content of the edit text widget
+            	sendBTMsg(FramePrefix + "2");
+            }
+        });
+        
+        // Initialize the send button with a listener that for click events
+        mRightButton = (Button) findViewById(R.id.button_right);
+        mRightButton.setOnClickListener(new OnClickListener() {
+            public void onClick(View v) {
+                // Send a message using content of the edit text widget
+            	sendBTMsg(FramePrefix + "3");
+            }
+        });
+        
+        // Initialize the send button with a listener that for click events
+        mDownButton = (Button) findViewById(R.id.button_down);
+        mDownButton.setOnClickListener(new OnClickListener() {
+            public void onClick(View v) {
+                // Send a message using content of the edit text widget
+            	sendBTMsg(FramePrefix + "4");
+            }
+        });
+        
+        
+        mBtnDisconnect.setOnClickListener(new OnClickListener() {
+
+			@Override
+			public void onClick(View v) {
+				sendBTMsg(FramePrefix + "stoprqst"); // Send Stop command to the drone to avoid moving without tablet connected
+				mIsUserInitiatedDisconnect = true;
+				new DisConnectBT().execute();
+			}
+		});
+
+    }
+    
+    
+    // Fast Way to show a toast 
+ 	private void msg(String s) 
+ 	{
+ 		Toast.makeText(getApplicationContext(), s, Toast.LENGTH_SHORT).show();
+ 	}
+ 
+    
+} // End Of Activity 

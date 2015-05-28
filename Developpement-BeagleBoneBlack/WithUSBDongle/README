@@ -1,0 +1,8 @@
+- Placer les fichiers *.service dans /lib/systemd/
+- Placer les fichiers *.sh dans /usr/bin/
+- Placer les fichiers drone-agent et drone-server dans /root/
+
+Ne pas oublier de faire les différentes configuration nécessaires : 
+https://gist.github.com/tstellanova/7323116
+
+Suivre le PDF dans ce dossier.

@@ -1,0 +1,92 @@
+package com.example.app;
+
+import android.os.Bundle;
+import android.support.v7.app.ActionBarActivity;
+import android.view.Menu;
+import android.view.MenuItem;
+
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.GoogleMap.OnMapClickListener;
+import com.google.android.gms.maps.MapFragment;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
+
+public class MapsActivity extends ActionBarActivity implements OnMapClickListener {
+	
+	private GoogleMap mMap;
+	double Latitude = 0;
+	double Longitude = 0; 
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState) 
+	{
+		Bundle extras = getIntent().getExtras();
+	
+		double Latitude = extras.getDouble("Latitude");
+		double Longitude = extras.getDouble("Longitude");
+		
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.activity_maps);
+		
+		mMap = ((MapFragment) getFragmentManager().findFragmentById(R.id.map)).getMap();
+		mMap.addMarker(new MarkerOptions().position(new LatLng(Latitude, Longitude)).title("Robot Position"));
+		mMap.setOnMapClickListener(new OnMapClickListener() {
+ 
+            @Override
+            public void onMapClick(LatLng latLng) {
+ 
+                // Creating a marker
+                MarkerOptions markerOptions = new MarkerOptions();
+ 
+                // Setting the position for the marker
+                markerOptions.position(latLng);
+ 
+                // Setting the title for the marker.
+                // This will be displayed on taping the marker
+                markerOptions.title(latLng.latitude + " : " + latLng.longitude);
+ 
+                // Clears the previously touched position
+                //mMap.clear();
+ 
+                // Animating to the touched position
+                mMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
+ 
+                // Placing a marker on the touched position
+                mMap.addMarker(markerOptions);
+            }
+        });
+    }
+	
+
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu) {
+
+		// Inflate the menu; this adds items to the action bar if it is present.
+		getMenuInflater().inflate(R.menu.maps, menu);
+		return true;
+	}
+
+	@Override
+	public boolean onOptionsItemSelected(MenuItem item) {
+		// Handle action bar item clicks here. The action bar will
+		// automatically handle clicks on the Home/Up button, so long
+		// as you specify a parent activity in AndroidManifest.xml.
+		int id = item.getItemId();
+		if (id == R.id.action_settings) {
+			return true;
+		}
+		return super.onOptionsItemSelected(item);
+	}
+
+
+	@Override
+	public void onMapClick(LatLng arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+
+
+
+
+}

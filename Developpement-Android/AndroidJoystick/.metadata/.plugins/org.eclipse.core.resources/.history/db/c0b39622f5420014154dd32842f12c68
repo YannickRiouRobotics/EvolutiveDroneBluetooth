@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/secure_connect_scan"
+          android:icon="@drawable/ic_action_search"
+          android:title="@string/secure_connect"
+          android:showAsAction="ifRoom|withText" />
+    <item android:id="@+id/discoverable"
+
+          android:title="@string/discoverable"
+         android:orderInCategory="2"
+          android:showAsAction="never" />
+        <!-- Settings, should always be in the overflow -->
+    <item
+        android:id="@+id/action_disconnect"
+        android:orderInCategory="1"
+        android:showAsAction="never"
+        android:title="@string/action_settings"/>
+    
+</menu>

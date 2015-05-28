@@ -1,0 +1,41 @@
+[
+  {
+    "symbolicName": "android",
+    "version": {
+      "major": -1,
+      "minor": -1,
+      "micro": -1,
+      "qualifier": ""
+    },
+    "jarFileFingerprint": "9d58c29f33a93f486da30401118a4e45a7f208cb",
+    "jarFileModificationDate": "2014-12-18T16:46:20+01:00",
+    "location": "/Users/Yannick/android-sdk/platforms/android-19/android.jar",
+    "javaRuntime": false
+  },
+  {
+    "symbolicName": "android-support-v4",
+    "version": {
+      "major": -1,
+      "minor": -1,
+      "micro": -1,
+      "qualifier": ""
+    },
+    "jarFileFingerprint": "efec67655f6db90757faa37201efcee2a9ec3507",
+    "jarFileModificationDate": "2014-10-16T15:51:09+02:00",
+    "location": "/Users/Yannick/Documents/DossiersENSSAT/3A/ProjetTechnoDrone/Developpement-Android/Android/EnssatDrone/libs/android-support-v4.jar",
+    "javaRuntime": false
+  },
+  {
+    "symbolicName": "android",
+    "version": {
+      "major": -1,
+      "minor": -1,
+      "micro": -1,
+      "qualifier": ""
+    },
+    "jarFileFingerprint": "99b6a3d5b4a540cddbb95eab3c27b406aba3360e",
+    "jarFileModificationDate": "2014-12-18T16:45:22+01:00",
+    "location": "/Users/Yannick/android-sdk/platforms/android-20/android.jar",
+    "javaRuntime": false
+  }
+]

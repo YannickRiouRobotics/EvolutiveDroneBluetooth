@@ -1,0 +1,1 @@
+INDEX VERSION 1.126+/Users/Yannick/Documents/DossiersENSSAT/3A/ProjetTechnoDrone/doc_depart/CMitchell_PLebeau/Re Rapport drone, partie Bluetooth/BluetoothChat/.metadata/.plugins/org.eclipse.jdt.core

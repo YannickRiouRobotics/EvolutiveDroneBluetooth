@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Copy 2 elements to &apos;drawable&apos;&#x0A;- Original project: &apos;BluetoothComTest&apos;&#x0A;- Destination element: &apos;drawable&apos;&#x0A;- Original elements:&#x0A;     keypadbutton.xml&#x0A;     obstaclewarning.png" description="Copy files" element1="res/drawable/keypadbutton.xml" element2="res/drawable/obstaclewarning.png" files="2" flags="589830" folders="0" id="org.eclipse.jdt.ui.copy" policy="org.eclipse.jdt.ui.copyResources" stamp="1412953730413" target="/BlueSerial/res/drawable" units="0" version="1.0"/>
+</session>

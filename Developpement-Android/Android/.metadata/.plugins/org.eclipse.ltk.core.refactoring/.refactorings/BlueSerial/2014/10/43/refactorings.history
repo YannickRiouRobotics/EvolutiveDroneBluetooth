@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Copy element &apos;MyApplication.java&apos; to &apos;EnssatDrone/src/com.projeteii3.enssatdrone&apos;&#x0A;- Original project: &apos;BlueSerial&apos;&#x0A;- Destination element: &apos;EnssatDrone/src/com.projeteii3.enssatdrone&apos;&#x0A;- Original element: &apos;com.blueserial.MyApplication.java&apos;" description="Copy compilation unit" destination="=EnssatDrone/src&lt;com.projeteii3.enssatdrone" element1="/src&lt;com.blueserial{MyApplication.java" files="0" flags="589830" folders="0" id="org.eclipse.jdt.ui.copy" policy="org.eclipse.jdt.ui.copyResources" stamp="1414074888503" units="1" version="1.0"/>
+</session>
